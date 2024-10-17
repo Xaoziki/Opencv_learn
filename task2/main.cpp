@@ -4,45 +4,11 @@
 
 using namespace cv;
 using namespace std;
-int alpha, beta;
+
 Mat image;
 Mat gray, imgresize, imgblur, imgdil, imgth;
-
-/*
-void on_track(int, void*){
-    threshold(imgblur, image, alpha, 255, 0);
-    resize(image,imgresize,Size(),0.3,0.3);
-    imshow("result",imgresize);
-}
-*/
-
-Mat cameraMatrix = (Mat_<double>(3, 3) << 3945.45992802447, 0, 1378.521371614085, 0, 3962.445556513878, 2200.710056708469, 0, 0, 1);
-Mat distCoeffs = (Mat_<double>(1, 5) << 0.3139766312433063, -1.735717776661014, 0.01567993142102008, -0.01343764071682717, 5.621684162487409);
-
-
-void calculateDistance(const vector<Point2f>& imagePoints) {
-    // 定义色块的真实三维坐标 (单位: cm)
-    vector<Point3f> objectPoints;
-    objectPoints.push_back(Point3f(0, 0, 0));
-    objectPoints.push_back(Point3f(9.6, 0, 0));
-    objectPoints.push_back(Point3f(9.6, 9.6, 0));
-    objectPoints.push_back(Point3f(0, 9.6, 0));
-
-    // solvePnP 计算旋转矩阵和平移向量
-    Mat rvec, tvec;
-    solvePnP(objectPoints, imagePoints, cameraMatrix, distCoeffs, rvec, tvec);
-
-    // 计算距离 (即平移向量 tvec 的模长)
-    double distance = norm(tvec);
-
-    // 打印距离
-    cout << "距离: " << distance<< " cm" << endl;
-
-    // 在图像上标注距离
-    String text = format("Distance: %.2f cm", distance);
-    putText(image, text, Point(imagePoints[0].x, imagePoints[0].y - 10),
-            FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 255, 0), 2);
-}
+Mat cameraMatrix = (Mat_<double>(3, 3) << 3916.143931422424, 0, 1385.210988879861, 0, 3933.751441780795, 2208.169167568601, 0, 0, 1);
+Mat distCoeffs = (Mat_<double>(1, 5) << 0.2994338494009186, -1.574013213125817, 0.01718489359160927, -0.01208570734985182, 4.904165993574098);
 
 int main(int argc, char** argv) {
     /*
@@ -60,17 +26,15 @@ int main(int argc, char** argv) {
     */
 
     //预处理
-    image = imread("./test2.jpg");
-    imgblur = Mat::zeros(image.size(),image.type());
+    image = imread("./test4.jpg");
     cvtColor(image, gray, COLOR_BGR2GRAY);
     GaussianBlur(gray, imgblur, Size(7,7),3,0);
-    threshold(imgblur, imgth, 62, 255, 1);
+    threshold(imgblur, imgth, 100, 255, 1);
     Mat kernel = getStructuringElement(MORPH_RECT, Size(5,5));
     dilate(imgth, imgdil, kernel);
 
     //查找轮廓
     vector<vector<Point>> contours;
-    vector<Point> largestContour;
     findContours(imgdil, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
     //寻找面积最大的轮廓
@@ -81,21 +45,32 @@ int main(int argc, char** argv) {
         if (area > maxarea) {
             maxarea = area;
             ii = i;
-            largestContour = contours[ii];
         }
     }
+    //绘制轮廓
     drawContours(image, contours, ii, Scalar(0, 0, 255), 5);
 
     vector<Point2f> approx;
-    approxPolyDP(largestContour, approx, arcLength(largestContour, true) * 0.02, true);
+    approxPolyDP(contours[ii], approx, arcLength(contours[ii], true) * 0.02, true);
     
-    /*
-    namedWindow("Trackbar",1);
-    createTrackbar("阈值","Trackbar",&alpha,255,on_track);
-    */
+    //定义3D点
+    vector<Point3f> objectPoints = {
+        Point3f(0, 0, 0),
+        Point3f(9.6, 0, 0),
+        Point3f(9.6, 9.6, 0),
+        Point3f(0, 9.6, 0)
+    };
 
-    calculateDistance(approx);
+    //进行PNP求解
+    Mat rvec, tvec;
+    solvePnP(objectPoints, approx, cameraMatrix, distCoeffs, rvec, tvec);
 
+    double distance = norm(tvec);
+    cout << "距离: " << distance<< " cm" << endl;
+
+    String text = format("Distance: %.2f cm", distance);
+    putText(image, text, Point(contours[ii][0]),FONT_HERSHEY_SIMPLEX, 2, Scalar(0, 0, 255), 2);
+    
     resize(image,imgresize,Size(),0.3,0.3);
     imshow("result",imgresize);
     waitKey(0);
