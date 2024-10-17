@@ -8,7 +8,7 @@
 using namespace cv;
 using namespace std;
  
-void main() 
+int main() 
 {
 	ifstream fin("calibdata.txt"); /* 标定所用图像文件的路径 */
 	ofstream fout("caliberation_result.txt");  /* 保存标定结果的文件 */	
@@ -203,5 +203,5 @@ void main()
 		imwrite(imageFileName,newimage);
 	}
 	std::cout<<"保存结束"<<endl;	
-	return ;
+	return 0;
 }
