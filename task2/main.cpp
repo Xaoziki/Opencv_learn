@@ -4,24 +4,29 @@
 
 using namespace cv;
 using namespace std;
-
-// 已知的色块的实际尺寸 (cm)
-const float blockWidth = 10.0;
-const float blockHeight = 10.0;
-
-// 相机内参 (假设已知或通过标定获得)
-Mat cameraMatrix = (Mat_<double>(3, 3) << 3085.924956718158, 0, 1626.255824526778, 0, 3101.282175832519, 2136.129568885164, 0, 0, 1);
-Mat distCoeffs = Mat::zeros(4, 1, CV_64F);  // 假设没有畸变
+int alpha, beta;
 Mat image;
+Mat gray, imgresize, imgblur, imgdil, imgth;
 
-// 计算目标与相机的距离
+/*
+void on_track(int, void*){
+    threshold(imgblur, image, alpha, 255, 0);
+    resize(image,imgresize,Size(),0.3,0.3);
+    imshow("result",imgresize);
+}
+*/
+
+Mat cameraMatrix = (Mat_<double>(3, 3) << 3945.45992802447, 0, 1378.521371614085, 0, 3962.445556513878, 2200.710056708469, 0, 0, 1);
+Mat distCoeffs = (Mat_<double>(1, 5) << 0.3139766312433063, -1.735717776661014, 0.01567993142102008, -0.01343764071682717, 5.621684162487409);
+
+
 void calculateDistance(const vector<Point2f>& imagePoints) {
     // 定义色块的真实三维坐标 (单位: cm)
     vector<Point3f> objectPoints;
     objectPoints.push_back(Point3f(0, 0, 0));
-    objectPoints.push_back(Point3f(blockWidth, 0, 0));
-    objectPoints.push_back(Point3f(blockWidth, blockHeight, 0));
-    objectPoints.push_back(Point3f(0, blockHeight, 0));
+    objectPoints.push_back(Point3f(9.6, 0, 0));
+    objectPoints.push_back(Point3f(9.6, 9.6, 0));
+    objectPoints.push_back(Point3f(0, 9.6, 0));
 
     // solvePnP 计算旋转矩阵和平移向量
     Mat rvec, tvec;
@@ -31,17 +36,18 @@ void calculateDistance(const vector<Point2f>& imagePoints) {
     double distance = norm(tvec);
 
     // 打印距离
-    cout << "距离: " << distance * 100 << " cm" << endl;
+    cout << "距离: " << distance<< " cm" << endl;
 
     // 在图像上标注距离
-    String text = format("Distance: %.2f cm", distance * 100);
+    String text = format("Distance: %.2f cm", distance);
     putText(image, text, Point(imagePoints[0].x, imagePoints[0].y - 10),
             FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 255, 0), 2);
 }
 
 int main(int argc, char** argv) {
+    /*
     if (argc != 2) {
-        cout << "Usage: ./task2 block.jpg" << endl;
+        cout << "Usage: ./task2 test.jpg" << endl;
         return -1;
     }
 
@@ -51,54 +57,47 @@ int main(int argc, char** argv) {
         cerr << "Error: Could not open image!" << endl;
         return -1;
     }
+    */
 
-    // 转换为灰度图像
-    Mat gray;
+    //预处理
+    image = imread("./test2.jpg");
+    imgblur = Mat::zeros(image.size(),image.type());
     cvtColor(image, gray, COLOR_BGR2GRAY);
+    GaussianBlur(gray, imgblur, Size(7,7),3,0);
+    threshold(imgblur, imgth, 62, 255, 1);
+    Mat kernel = getStructuringElement(MORPH_RECT, Size(5,5));
+    dilate(imgth, imgdil, kernel);
 
-    // 二值化
-    Mat thresh;
-    threshold(gray, thresh, 50, 255, THRESH_BINARY_INV);
-
-    // 寻找轮廓
+    //查找轮廓
     vector<vector<Point>> contours;
-    findContours(thresh, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-
-    // 找到面积最大的轮廓
-    double maxArea = 0;
     vector<Point> largestContour;
-    for (const auto& contour : contours) {
-        double area = contourArea(contour);
-        if (area > maxArea) {
-            maxArea = area;
-            largestContour = contour;
+    findContours(imgdil, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+    //寻找面积最大的轮廓
+    double area, maxarea = 0;
+    int ii;
+    for (int i=0; i<contours.size();i++) {
+        area = contourArea(contours[i]);
+        if (area > maxarea) {
+            maxarea = area;
+            ii = i;
+            largestContour = contours[ii];
         }
     }
+    drawContours(image, contours, ii, Scalar(0, 0, 255), 5);
 
-    // 如果没有找到轮廓
-    if (largestContour.empty()) {
-        cerr << "Error: No contour found!" << endl;
-        return -1;
-    }
-
-    // 逼近多边形并获取顶点
     vector<Point2f> approx;
     approxPolyDP(largestContour, approx, arcLength(largestContour, true) * 0.02, true);
+    
+    /*
+    namedWindow("Trackbar",1);
+    createTrackbar("阈值","Trackbar",&alpha,255,on_track);
+    */
 
-    // 需要找到四边形
-    if (approx.size() != 4) {
-        cerr << "Error: Detected contour is not a quadrilateral!" << endl;
-        return -1;
-    }
-
-    // 绘制轮廓
-    drawContours(image, vector<vector<Point>>{approx}, -1, Scalar(0, 0, 255), 5);
-
-    // 计算距离
     calculateDistance(approx);
 
-    // 显示结果图像
-    imshow("Result", image);
+    resize(image,imgresize,Size(),0.3,0.3);
+    imshow("result",imgresize);
     waitKey(0);
 
     return 0;
