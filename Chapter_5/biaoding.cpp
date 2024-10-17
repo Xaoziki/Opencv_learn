@@ -16,7 +16,7 @@ void main()
 	cout<<"开始提取角点………………";
 	int image_count=0;  /* 图像数量 */
 	Size image_size;  /* 图像的尺寸 */
-	Size board_size = Size(4,6);    /* 标定板上每行、列的角点数 */
+	Size board_size = Size(8,12);    /* 标定板上每行、列的角点数 */
 	vector<Point2f> image_points_buf;  /* 缓存每幅图像上检测到的角点 */
 	vector<vector<Point2f>> image_points_seq; /* 保存检测到的所有角点 */
 	string filename;
